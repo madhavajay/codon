@@ -36,10 +36,8 @@
 // OpenMP patch with GC callbacks
 typedef int (*gc_setup_callback)(GC_stack_base *);
 typedef void (*gc_roots_callback)(void *, void *);
-extern "C" void __kmpc_set_gc_callbacks(gc_setup_callback get_stack_base,
-                                        gc_setup_callback register_thread,
-                                        gc_roots_callback add_roots,
-                                        gc_roots_callback del_roots);
+using kmpc_set_gc_callbacks_fn =
+    void (*)(gc_setup_callback, gc_setup_callback, gc_roots_callback, gc_roots_callback);
 
 void seq_exc_init(int flags);
 
@@ -53,8 +51,15 @@ SEQ_FUNC void seq_init(int flags) {
   GC_INIT();
   GC_set_warn_proc(GC_ignore_warn_proc);
   GC_allow_register_threads();
-  __kmpc_set_gc_callbacks(GC_get_stack_base, (gc_setup_callback)GC_register_my_thread,
-                          GC_add_roots, GC_remove_roots);
+  // __kmpc_set_gc_callbacks lives in libomp; on environments where OpenMP is
+  // not available (e.g. default macOS toolchains) it may be missing. Resolve it
+  // dynamically so we don't require the symbol at link time.
+  auto kmpc_cb = reinterpret_cast<kmpc_set_gc_callbacks_fn>(
+      dlsym(RTLD_DEFAULT, "__kmpc_set_gc_callbacks"));
+  if (kmpc_cb) {
+    kmpc_cb(GC_get_stack_base, (gc_setup_callback)GC_register_my_thread, GC_add_roots,
+            GC_remove_roots);
+  }
   seq_exc_init(flags);
 #ifdef CODON_GPU
   seq_nvptx_init();

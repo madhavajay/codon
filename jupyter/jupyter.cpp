@@ -41,13 +41,17 @@ nl::json CodonJupyter::execute_request_impl(int execution_counter, const string 
       result.takeError(),
       [&](const codon::error::ParserErrorInfo &e) {
         std::vector<string> backtrace;
-        for (auto &msg : e)
-          for (auto &s : msg)
+        for (auto &trace : e.getErrors())
+          for (auto &s : trace.getMessages())
             backtrace.push_back(s.getMessage());
-        string err = backtrace[0];
-        backtrace.erase(backtrace.begin());
-        failed = fmt::format("Compile error: {}\nBacktrace:\n{}", err,
-                             ast::join(backtrace, "  \n"));
+        if (!backtrace.empty()) {
+          string err = backtrace[0];
+          backtrace.erase(backtrace.begin());
+          failed = fmt::format("Compile error: {}\nBacktrace:\n{}", err,
+                               ast::join(backtrace, "  \n"));
+        } else {
+          failed = "Compile error";
+        }
       },
       [&](const codon::error::RuntimeErrorInfo &e) {
         auto backtrace = e.getBacktrace();

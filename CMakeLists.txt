@@ -82,8 +82,19 @@ target_include_directories(codonrt PRIVATE ${backtrace_SOURCE_DIR}
                                            ${re2_SOURCE_DIR}
                                            "${gc_SOURCE_DIR}/include"
                                            "${fast_float_SOURCE_DIR}/include" runtime)
-target_link_libraries(codonrt PRIVATE fmt omp backtrace ${STATIC_LIBCPP}
-                                      LLVMSupport)
+# Ensure OpenMP runtime target exists (macOS/Homebrew fallback)
+if(NOT TARGET omp)
+  find_library(LIBOMP
+    NAMES omp libomp
+    HINTS /opt/homebrew/opt/libomp/lib /usr/local/opt/libomp/lib /opt/homebrew/opt/llvm/lib)
+  if(LIBOMP)
+    add_library(omp SHARED IMPORTED)
+    set_target_properties(omp PROPERTIES IMPORTED_LOCATION ${LIBOMP})
+  else()
+    message(FATAL_ERROR "OpenMP runtime not found. Install libomp (e.g., brew install libomp) or rebuild LLVM with OpenMP enabled.")
+  endif()
+endif()
+target_link_libraries(codonrt PRIVATE fmt omp backtrace LLVMSupport)
 if(APPLE)
   target_link_libraries(
     codonrt
