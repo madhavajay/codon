@@ -41,9 +41,9 @@ nl::json CodonJupyter::execute_request_impl(int execution_counter, const string 
       result.takeError(),
       [&](const codon::error::ParserErrorInfo &e) {
         std::vector<string> backtrace;
-        for (auto &trace : e.getErrors())
-          for (auto &s : trace.getMessages())
-            backtrace.push_back(s.getMessage());
+        for (auto &group : e)
+          for (auto &msg : group)
+            backtrace.push_back(msg.getMessage());
         if (!backtrace.empty()) {
           string err = backtrace[0];
           backtrace.erase(backtrace.begin());

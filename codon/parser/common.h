@@ -11,6 +11,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -106,7 +107,7 @@ const V *in(const std::unordered_map<K, V> &m, const U &item) {
 }
 /// @return vector c transformed by the function f.
 template <typename T, typename F> auto vmap(const std::vector<T> &c, F &&f) {
-  std::vector<typename std::result_of<F(const T &)>::type> ret;
+  std::vector<std::invoke_result_t<F, const T &>> ret;
   std::transform(std::begin(c), std::end(c), std::inserter(ret, std::end(ret)), f);
   return ret;
 }
