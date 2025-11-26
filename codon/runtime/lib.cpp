@@ -17,6 +17,7 @@
 #include <sstream>
 #include <string>
 #include <thread>
+#include <dlfcn.h>
 #include <unistd.h>
 #include <unwind.h>
 #include <vector>
