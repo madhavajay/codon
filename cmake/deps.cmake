@@ -43,17 +43,49 @@ if(zlibng_ADDED)
     set_target_properties(zlib PROPERTIES EXCLUDE_FROM_ALL ON)
 endif()
 
+set(XZ_SOURCE_DIR_OVERRIDE "")
+if(DEFINED ENV{XZ_SOURCE_DIR} AND EXISTS "$ENV{XZ_SOURCE_DIR}")
+    message(STATUS "Using pre-downloaded xz from $ENV{XZ_SOURCE_DIR}")
+    set(XZ_SOURCE_DIR_OVERRIDE "$ENV{XZ_SOURCE_DIR}")
+endif()
+
 CPMAddPackage(
     NAME xz
     GITHUB_REPOSITORY "xz-mirror/xz"
     VERSION 5.2.5
     GIT_TAG e7da44d5151e21f153925781ad29334ae0786101
+    SOURCE_DIR ${XZ_SOURCE_DIR_OVERRIDE}
     EXCLUDE_FROM_ALL YES
     OPTIONS "BUILD_SHARED_LIBS OFF"
             "CMAKE_POSITION_INDEPENDENT_CODE ON")
-if(xz_ADDED)
+if(TARGET xz)
     set_target_properties(xz PROPERTIES EXCLUDE_FROM_ALL ON)
     set_target_properties(xzdec PROPERTIES EXCLUDE_FROM_ALL ON)
+elseif(xz_ADDED)
+    message(WARNING "xz package declared but targets not found; creating interface stubs.")
+    add_library(xz INTERFACE IMPORTED)
+    add_library(xzdec INTERFACE IMPORTED)
+endif()
+
+# Ensure liblzma target exists (for macOS/system builds without fetched xz)
+if(NOT TARGET liblzma)
+    if(EXISTS "/opt/homebrew/opt/xz/lib/liblzma.dylib")
+        set(LIBLZMA "/opt/homebrew/opt/xz/lib/liblzma.dylib")
+    endif()
+    find_library(LIBLZMA liblzma HINTS /opt/homebrew/opt/xz/lib /usr/local/opt/xz/lib PATHS ${LIBLZMA})
+    if(LIBLZMA)
+        add_library(liblzma SHARED IMPORTED)
+        set_target_properties(liblzma PROPERTIES IMPORTED_LOCATION ${LIBLZMA})
+    elseif(xz_ADDED)
+        # Fall back to the liblzma built by xz if available.
+        if(TARGET lzma)
+            add_library(liblzma ALIAS lzma)
+        else()
+            message(WARNING "liblzma not found; Codon build may fail when linking.")
+        endif()
+    else()
+        message(WARNING "liblzma not found; Codon build may fail when linking.")
+    endif()
 endif()
 
 CPMAddPackage(
