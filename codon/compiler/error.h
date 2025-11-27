@@ -400,8 +400,7 @@ template <class... TA> std::string Emsg(Error e, const TA &...args) {
 
   /// Typechecking
   case Error::UNION_TOO_BIG:
-    return fmt::format(
-        "union exceeded its maximum capacity (contains more than {} types)");
+    return fmt::format("union exceeded its maximum capacity (contains too many types)");
   case Error::DOT_NO_ATTR:
     return fmt::format("'{}' object has no attribute '{}'", args...);
   case Error::DOT_NO_ATTR_ARGS:

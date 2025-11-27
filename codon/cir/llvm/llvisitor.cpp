@@ -1230,8 +1230,14 @@ void LLVMVisitor::run(const std::vector<std::string> &args,
 
   DebugPlugin *dbp = nullptr;
   llvm::Triple triple(M->getTargetTriple());
-  auto epc = llvm::cantFail(llvm::orc::SelfExecutorProcessControl::Create(
-      std::make_shared<llvm::orc::SymbolStringPool>()));
+  auto epcOrErr = llvm::orc::SelfExecutorProcessControl::Create(
+      std::make_shared<llvm::orc::SymbolStringPool>());
+  if (!epcOrErr) {
+    llvm::errs() << "LLJIT: failed to create SelfExecutorProcessControl: "
+                 << llvm::toString(epcOrErr.takeError()) << "\n";
+    std::abort();
+  }
+  auto epc = std::move(*epcOrErr);
 
   llvm::orc::LLJITBuilder builder;
   builder.setDataLayout(llvm::DataLayout(M.get()));
@@ -1251,14 +1257,30 @@ void LLVMVisitor::run(const std::vector<std::string> &args,
       });
   builder.setJITTargetMachineBuilder(llvm::orc::JITTargetMachineBuilder(triple));
 
-  auto jit = llvm::cantFail(builder.create());
+  auto jitOrErr = builder.create();
+  if (!jitOrErr) {
+    llvm::errs() << "LLJIT: builder.create failed: "
+                 << llvm::toString(jitOrErr.takeError()) << "\n";
+    std::abort();
+  }
+  auto jit = std::move(*jitOrErr);
   jit->getMainJITDylib().addGenerator(
       llvm::cantFail(llvm::orc::DynamicLibrarySearchGenerator::GetForCurrentProcess(
           jit->getDataLayout().getGlobalPrefix())));
 
-  llvm::cantFail(jit->addIRModule({std::move(M), std::move(context)}));
+  if (auto err = jit->addIRModule({std::move(M), std::move(context)})) {
+    llvm::errs() << "LLJIT: addIRModule failed: " << llvm::toString(std::move(err))
+                 << "\n";
+    std::abort();
+  }
   clearLLVMData();
-  auto mainAddr = llvm::cantFail(jit->lookup("main"));
+  auto mainLookup = jit->lookup("main");
+  if (!mainLookup) {
+    llvm::errs() << "LLJIT: lookup('main') failed: "
+                 << llvm::toString(mainLookup.takeError()) << "\n";
+    std::abort();
+  }
+  auto mainAddr = *mainLookup;
 
   if (db.debug) {
     runtime::setJITErrorCallback([dbp](const runtime::JITError &e) {

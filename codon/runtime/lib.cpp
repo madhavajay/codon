@@ -52,6 +52,7 @@ SEQ_FUNC void seq_init(int flags) {
   GC_INIT();
   GC_set_warn_proc(GC_ignore_warn_proc);
   GC_allow_register_threads();
+#if CODON_ENABLE_OPENMP
   // __kmpc_set_gc_callbacks lives in libomp; on environments where OpenMP is
   // not available (e.g. default macOS toolchains) it may be missing. Resolve it
   // dynamically so we don't require the symbol at link time.
@@ -61,6 +62,7 @@ SEQ_FUNC void seq_init(int flags) {
     kmpc_cb(GC_get_stack_base, (gc_setup_callback)GC_register_my_thread, GC_add_roots,
             GC_remove_roots);
   }
+#endif
   seq_exc_init(flags);
 #ifdef CODON_GPU
   seq_nvptx_init();

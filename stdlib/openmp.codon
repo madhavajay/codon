@@ -2,6 +2,8 @@
 # OpenMP interface
 # Ref: https://github.com/llvm/llvm-project/tree/main/openmp
 
+from internal.config import openmp_enabled as _openmp_enabled
+
 Routine = Function[[i32, cobj], i32]
 
 _KMP_IDENT_IMB = 0x01
@@ -597,25 +599,35 @@ def _task_loop_outline_template(gtid_ptr: Ptr[i32], btid_ptr: Ptr[i32], args):
 
 @pure
 def get_num_threads():
+    if not _openmp_enabled:
+        return 1
     from C import omp_get_num_threads() -> i32
     return int(omp_get_num_threads())
 
 @pure
 def get_thread_num():
+    if not _openmp_enabled:
+        return 0
     from C import omp_get_thread_num() -> i32
     return int(omp_get_thread_num())
 
 @pure
 def get_max_threads():
+    if not _openmp_enabled:
+        return 1
     from C import omp_get_max_threads() -> i32
     return int(omp_get_max_threads())
 
 @pure
 def get_num_procs():
+    if not _openmp_enabled:
+        return 1
     from C import omp_get_num_procs() -> i32
     return int(omp_get_num_procs())
 
 def set_num_threads(num_threads: int):
+    if not _openmp_enabled:
+        return
     from C import omp_set_num_threads(i32)
     omp_set_num_threads(i32(num_threads))
 

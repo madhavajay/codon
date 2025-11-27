@@ -35,6 +35,7 @@ from internal.format import *
 from internal.builtin import *
 from internal.builtin import _jit_display
 from internal.str import *
+from internal.config import openmp_enabled as __openmp_enabled__
 
 from internal.sort import sorted
 

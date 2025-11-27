@@ -1,5 +1,7 @@
 # Copyright (C) 2022-2024 Exaloop Inc. <https://exaloop.io>
 
+from internal.config import openmp_enabled as _openmp_enabled
+
 @tuple
 class Lock:
     p: cobj
@@ -43,10 +45,14 @@ class RLock:
         self.release()
 
 def active_count() -> int:
+    if not _openmp_enabled:
+        return 1
     from openmp import get_num_threads
     return get_num_threads()
 
 def get_native_id() -> int:
+    if not _openmp_enabled:
+        return 0
     from openmp import get_thread_num
     return get_thread_num()
 

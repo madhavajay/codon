@@ -433,6 +433,7 @@ void TranslateVisitor::visit(WhileStmt *stmt) {
 
 void TranslateVisitor::visit(ForStmt *stmt) {
   std::unique_ptr<OMPSched> os = nullptr;
+#if CODON_ENABLE_OPENMP
   if (stmt->decorator) {
     os = std::make_unique<OMPSched>();
     auto c = stmt->decorator->getCall();
@@ -450,6 +451,15 @@ void TranslateVisitor::visit(ForStmt *stmt) {
     bool gpu = fc->funcGenerics[3].type->getStatic()->expr->staticValue.getInt();
     os = std::make_unique<OMPSched>(schedule, threads, chunk, ordered, collapse, gpu);
   }
+#else
+  if (stmt->decorator) {
+    auto src = stmt->getSrcInfo();
+    if (!src.file.empty()) {
+      compilationWarning("OpenMP disabled at build time; loop will run serially.", src.file,
+                         src.line, src.col);
+    }
+  }
+#endif
 
   seqassert(stmt->var->getId(), "expected IdExpr, got {}", stmt->var);
   auto varName = stmt->var->getId()->value;

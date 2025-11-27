@@ -68,3 +68,7 @@ jit/codon/version.py
 temp/
 playground/
 scratch*.*
+
+build-openmp/*
+build-asan/*
+build-openmp-llvm/*

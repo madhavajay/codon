@@ -4,6 +4,9 @@ project(
   VERSION "0.17.0"
   HOMEPAGE_URL "https://github.com/exaloop/codon"
   DESCRIPTION "high-performance, extensible Python compiler")
+
+# Avoid network fetches on rebuild if deps already populated.
+set(FETCHCONTENT_UPDATES_DISCONNECTED ON)
 set(CODON_JIT_PYTHON_VERSION "0.2.0")
 configure_file("${PROJECT_SOURCE_DIR}/cmake/config.h.in"
                "${PROJECT_SOURCE_DIR}/codon/config/config.h")
@@ -11,6 +14,23 @@ configure_file("${PROJECT_SOURCE_DIR}/cmake/config.py.in"
                "${PROJECT_SOURCE_DIR}/jit/codon/version.py")
 
 option(CODON_GPU "build Codon GPU backend" OFF)
+option(CODON_ENABLE_OPENMP "build Codon with OpenMP runtime support" ON)
+
+if(CODON_ENABLE_OPENMP)
+  set(CODON_OPENMP_DEFINE 1)
+else()
+  set(CODON_OPENMP_DEFINE 0)
+endif()
+add_compile_definitions(CODON_ENABLE_OPENMP=${CODON_OPENMP_DEFINE})
+
+if(CODON_ENABLE_OPENMP)
+  set(CODON_OPENMP_FLAG True)
+else()
+  set(CODON_OPENMP_FLAG False)
+endif()
+file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/stdlib/internal")
+configure_file("${PROJECT_SOURCE_DIR}/stdlib/internal/config.codon.in"
+               "${CMAKE_BINARY_DIR}/stdlib/internal/config.codon" @ONLY)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
@@ -83,18 +103,23 @@ target_include_directories(codonrt PRIVATE ${backtrace_SOURCE_DIR}
                                            "${gc_SOURCE_DIR}/include"
                                            "${fast_float_SOURCE_DIR}/include" runtime)
 # Ensure OpenMP runtime target exists (macOS/Homebrew fallback)
-if(NOT TARGET omp)
-  find_library(LIBOMP
-    NAMES omp libomp
-    HINTS /opt/homebrew/opt/libomp/lib /usr/local/opt/libomp/lib /opt/homebrew/opt/llvm/lib)
-  if(LIBOMP)
-    add_library(omp SHARED IMPORTED)
-    set_target_properties(omp PROPERTIES IMPORTED_LOCATION ${LIBOMP})
-  else()
-    message(FATAL_ERROR "OpenMP runtime not found. Install libomp (e.g., brew install libomp) or rebuild LLVM with OpenMP enabled.")
+if(CODON_ENABLE_OPENMP)
+  if(NOT TARGET omp)
+    find_library(LIBOMP
+      NAMES omp libomp
+      HINTS /opt/homebrew/opt/libomp/lib /usr/local/opt/libomp/lib /opt/homebrew/opt/llvm/lib)
+    if(LIBOMP)
+      add_library(omp SHARED IMPORTED)
+      set_target_properties(omp PROPERTIES IMPORTED_LOCATION ${LIBOMP})
+    else()
+      message(FATAL_ERROR "OpenMP runtime not found. Install libomp (e.g., brew install libomp) or rebuild LLVM with OpenMP enabled.")
+    endif()
   endif()
+  target_link_libraries(codonrt PRIVATE fmt omp backtrace LLVMSupport)
+else()
+  message(STATUS "Building without OpenMP runtime; parallel for loops will execute serially.")
+  target_link_libraries(codonrt PRIVATE fmt backtrace LLVMSupport)
 endif()
-target_link_libraries(codonrt PRIVATE fmt omp backtrace LLVMSupport)
 if(APPLE)
   target_link_libraries(
     codonrt
@@ -123,11 +148,13 @@ if(CODON_GPU)
   find_package(CUDAToolkit REQUIRED)
   target_link_libraries(codonrt PRIVATE CUDA::cudart_static CUDA::cuda_driver)
 endif()
-add_custom_command(
-  TARGET codonrt
-  POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:omp>
-          ${CMAKE_BINARY_DIR})
+if(CODON_ENABLE_OPENMP)
+  add_custom_command(
+    TARGET codonrt
+    POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:omp>
+            ${CMAKE_BINARY_DIR})
+endif()
 
 # Codon compiler library
 include_directories(${LLVM_INCLUDE_DIRS})
@@ -406,12 +433,23 @@ add_custom_target(
   COMMAND
     ${CMAKE_COMMAND} -E copy
     "${CMAKE_BINARY_DIR}/libcodonrt${CMAKE_SHARED_LIBRARY_SUFFIX}"
-    "${CMAKE_BINARY_DIR}/lib/codon"
-  COMMAND
-    ${CMAKE_COMMAND} -E copy
-    "${CMAKE_BINARY_DIR}/libomp${CMAKE_SHARED_LIBRARY_SUFFIX}"
     "${CMAKE_BINARY_DIR}/lib/codon")
 add_dependencies(libs codonrt codonc)
+
+if(CODON_ENABLE_OPENMP)
+  add_custom_command(
+    TARGET libs
+    POST_BUILD
+    COMMAND
+      ${CMAKE_COMMAND} -E copy
+      "${CMAKE_BINARY_DIR}/libomp${CMAKE_SHARED_LIBRARY_SUFFIX}"
+      "${CMAKE_BINARY_DIR}/lib/codon")
+else()
+  add_custom_command(
+    TARGET libs
+    POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E echo "OpenMP disabled - skipping libomp copy.")
+endif()
 
 # Codon command-line tool
 add_executable(codon codon/app/main.cpp)
@@ -452,9 +490,15 @@ target_compile_definitions(codon_test
                            PRIVATE TEST_DIR="${CMAKE_CURRENT_SOURCE_DIR}/test")
 
 install(TARGETS codonrt codonc codon_jupyter DESTINATION lib/codon)
-install(FILES ${CMAKE_BINARY_DIR}/libomp${CMAKE_SHARED_LIBRARY_SUFFIX} DESTINATION lib/codon)
+if(CODON_ENABLE_OPENMP)
+  install(FILES ${CMAKE_BINARY_DIR}/libomp${CMAKE_SHARED_LIBRARY_SUFFIX}
+          DESTINATION lib/codon)
+endif()
 install(TARGETS codon DESTINATION bin)
 install(DIRECTORY ${CMAKE_BINARY_DIR}/include/codon DESTINATION include)
-install(DIRECTORY ${CMAKE_SOURCE_DIR}/stdlib DESTINATION lib/codon)
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/stdlib DESTINATION lib/codon
+        PATTERN "internal/config.codon.in" EXCLUDE)
+install(FILES ${CMAKE_BINARY_DIR}/stdlib/internal/config.codon
+        DESTINATION lib/codon/stdlib/internal)
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/jit/ DESTINATION python)
 install(DIRECTORY DESTINATION lib/codon/plugins)
