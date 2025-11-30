@@ -2274,46 +2274,57 @@ llvm::FunctionType *LLVMVisitor::getLLVMFuncType(types::Type *t) {
 
 llvm::DIType *LLVMVisitor::getDITypeHelper(
     types::Type *t, std::unordered_map<std::string, llvm::DICompositeType *> &cache) {
-  llvm::Type *type = getLLVMType(t);
+  // Fixed use-after-poison: get fresh LLVM type on each use instead of caching
+  // to avoid stale pointers across recursive getDITypeHelper calls.
+  if (!db.debug) return nullptr;
   auto &layout = M->getDataLayout();
 
+  // For simple types without recursion, safe to get type once
   if (auto *x = cast<types::IntType>(t)) {
+    auto *type = getLLVMType(t);
     return db.builder->createBasicType(
         x->getName(), layout.getTypeAllocSizeInBits(type), llvm::dwarf::DW_ATE_signed);
   }
 
   if (auto *x = cast<types::FloatType>(t)) {
+    auto *type = getLLVMType(t);
     return db.builder->createBasicType(
         x->getName(), layout.getTypeAllocSizeInBits(type), llvm::dwarf::DW_ATE_float);
   }
 
   if (auto *x = cast<types::Float32Type>(t)) {
+    auto *type = getLLVMType(t);
     return db.builder->createBasicType(
         x->getName(), layout.getTypeAllocSizeInBits(type), llvm::dwarf::DW_ATE_float);
   }
 
   if (auto *x = cast<types::Float16Type>(t)) {
+    auto *type = getLLVMType(t);
     return db.builder->createBasicType(
         x->getName(), layout.getTypeAllocSizeInBits(type), llvm::dwarf::DW_ATE_float);
   }
 
   if (auto *x = cast<types::BFloat16Type>(t)) {
+    auto *type = getLLVMType(t);
     return db.builder->createBasicType(
         x->getName(), layout.getTypeAllocSizeInBits(type), llvm::dwarf::DW_ATE_float);
   }
 
   if (auto *x = cast<types::Float128Type>(t)) {
+    auto *type = getLLVMType(t);
     return db.builder->createBasicType(x->getName(),
                                        layout.getTypeAllocSizeInBits(type),
                                        llvm::dwarf::DW_ATE_HP_float128);
   }
 
   if (auto *x = cast<types::BoolType>(t)) {
+    auto *type = getLLVMType(t);
     return db.builder->createBasicType(
         x->getName(), layout.getTypeAllocSizeInBits(type), llvm::dwarf::DW_ATE_boolean);
   }
 
   if (auto *x = cast<types::ByteType>(t)) {
+    auto *type = getLLVMType(t);
     return db.builder->createBasicType(x->getName(),
                                        layout.getTypeAllocSizeInBits(type),
                                        llvm::dwarf::DW_ATE_signed_char);
@@ -2328,7 +2339,10 @@ llvm::DIType *LLVMVisitor::getDITypeHelper(
     if (it != cache.end()) {
       return it->second;
     } else {
-      auto *structType = llvm::cast<llvm::StructType>(type);
+      // Get fresh type AFTER cache check but BEFORE recursion to avoid stale pointer
+      auto *llvmType = getLLVMType(t);
+      if (!llvmType) return nullptr;
+      auto *structType = llvm::cast<llvm::StructType>(llvmType);
       auto *structLayout = layout.getStructLayout(structType);
       auto *srcInfo = getSrcInfo(x);
       auto *memberInfo = x->getAttribute<MemberAttribute>();
@@ -2411,7 +2425,7 @@ llvm::DIType *LLVMVisitor::getDITypeHelper(
     }
     return db.builder->createPointerType(
         db.builder->createSubroutineType(llvm::MDTuple::get(*context, argTypes)),
-        layout.getTypeAllocSizeInBits(type));
+        layout.getTypeAllocSizeInBits(getLLVMType(t)));
   }
 
   if (auto *x = cast<types::OptionalType>(t)) {
@@ -2450,29 +2464,29 @@ llvm::DIType *LLVMVisitor::getDITypeHelper(
 
   if (auto *x = cast<types::PointerType>(t)) {
     return db.builder->createPointerType(getDITypeHelper(x->getBase(), cache),
-                                         layout.getTypeAllocSizeInBits(type));
+                                         layout.getTypeAllocSizeInBits(getLLVMType(t)));
   }
 
   if (auto *x = cast<types::GeneratorType>(t)) {
     return db.builder->createBasicType(
-        x->getName(), layout.getTypeAllocSizeInBits(type), llvm::dwarf::DW_ATE_address);
+        x->getName(), layout.getTypeAllocSizeInBits(getLLVMType(t)), llvm::dwarf::DW_ATE_address);
   }
 
   if (auto *x = cast<types::IntNType>(t)) {
     return db.builder->createBasicType(
-        x->getName(), layout.getTypeAllocSizeInBits(type),
+        x->getName(), layout.getTypeAllocSizeInBits(getLLVMType(t)),
         x->isSigned() ? llvm::dwarf::DW_ATE_signed : llvm::dwarf::DW_ATE_unsigned);
   }
 
   if (auto *x = cast<types::VectorType>(t)) {
     return db.builder->createBasicType(x->getName(),
-                                       layout.getTypeAllocSizeInBits(type),
+                                       layout.getTypeAllocSizeInBits(getLLVMType(t)),
                                        llvm::dwarf::DW_ATE_unsigned);
   }
 
   if (auto *x = cast<types::UnionType>(t)) {
     return db.builder->createBasicType(x->getName(),
-                                       layout.getTypeAllocSizeInBits(type),
+                                       layout.getTypeAllocSizeInBits(getLLVMType(t)),
                                        llvm::dwarf::DW_ATE_unsigned);
   }
 
