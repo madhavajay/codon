@@ -157,13 +157,6 @@ def _taskgroup_end(loc_ref: Ptr[Ident], gtid: int):
     from C import __kmpc_end_taskgroup(Ptr[Ident], i32)
     __kmpc_end_taskgroup(loc_ref, i32(gtid))
 
-def _task_alloc_size(
-    size_of_task: int,
-    size_of_shareds: int,
-):
-    from C import __kmpc_omp_task_alloc_size(int, int) -> int
-    return __kmpc_omp_task_alloc_size(size_of_task, size_of_shareds)
-
 def _task_alloc(
     loc_ref: Ptr[Ident],
     gtid: int,
@@ -172,12 +165,12 @@ def _task_alloc(
     size_of_shareds: int,
     task_entry: Routine,
 ):
-    from internal.gc import alloc
-    from C import __kmpc_omp_task_alloc(Ptr[Ident], i32, i32, int, int, Routine, cobj) -> cobj
+    # Use the standard libomp task allocator to avoid relying on Codon's
+    # extended libomp patches that may not be present in Homebrew libomp.
+    from C import __kmpc_omp_task_alloc(Ptr[Ident], i32, i32, int, int, Routine) -> cobj
 
-    taskdata = alloc(_task_alloc_size(size_of_task, size_of_shareds))
     return __kmpc_omp_task_alloc(
-        loc_ref, i32(gtid), i32(flags), size_of_task, size_of_shareds, task_entry, taskdata
+        loc_ref, i32(gtid), i32(flags), size_of_task, size_of_shareds, task_entry
     )
 
 def _task_run(loc_ref: Ptr[Ident], gtid: int, new_task: cobj):
