@@ -62,7 +62,6 @@ CPMAddPackage(
     VERSION 3.0.5
     GIT_TAG 3.0.5
     EXCLUDE_FROM_ALL YES
-    PATCH_COMMAND git apply --reject --whitespace=fix ${CMAKE_SOURCE_DIR}/xeus.patch
     OPTIONS "BUILD_EXAMPLES OFF"
             "XEUS_BUILD_SHARED_LIBS OFF"
             "XEUS_STATIC_DEPENDENCIES ON"
@@ -83,6 +82,7 @@ CPMAddPackage(
           "ENABLE_CPACK OFF"
           "BUILD_SHARED ON"
           "WITH_LIBSODIUM OFF"
+          "ENABLE_CURVE OFF"
           "WITH_TLS OFF"
           "WITH_DOC OFF")
 CPMAddPackage(
